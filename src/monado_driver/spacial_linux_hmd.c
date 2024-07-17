@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: BSL-1.0
 /*!
  * @file
- * @brief  Dummy HMD device.
+ * @brief  spacial_linux HMD device.
  * @author Jakob Bornecrantz <jakob@collabora.com>
- * @ingroup drv_dummy
+ * @ingroup drv_spacial_linux
  */
 
 #include "xrt/xrt_device.h"
@@ -36,7 +36,7 @@
  *
  * @implements xrt_device
  */
-struct dummy_hmd
+struct spacial_linux_hmd
 {
 	struct xrt_device base;
 
@@ -56,22 +56,22 @@ struct dummy_hmd
  *
  */
 
-static inline struct dummy_hmd *
-dummy_hmd(struct xrt_device *xdev)
+static inline struct spacial_linux_hmd *
+spacial_linux_hmd(struct xrt_device *xdev)
 {
-	return (struct dummy_hmd *)xdev;
+	return (struct spacial_linux_hmd *)xdev;
 }
 
-DEBUG_GET_ONCE_LOG_OPTION(dummy_log, "DUMMY_LOG", U_LOGGING_WARN)
+DEBUG_GET_ONCE_LOG_OPTION(spacial_linux_log, "spacial_linux_LOG", U_LOGGING_WARN)
 
 #define DH_TRACE(p, ...) U_LOG_XDEV_IFL_T(&dh->base, dh->log_level, __VA_ARGS__)
 #define DH_DEBUG(p, ...) U_LOG_XDEV_IFL_D(&dh->base, dh->log_level, __VA_ARGS__)
 #define DH_ERROR(p, ...) U_LOG_XDEV_IFL_E(&dh->base, dh->log_level, __VA_ARGS__)
 
 static void
-dummy_hmd_destroy(struct xrt_device *xdev)
+spacial_linux_hmd_destroy(struct xrt_device *xdev)
 {
-	struct dummy_hmd *dh = dummy_hmd(xdev);
+	struct spacial_linux_hmd *dh = spacial_linux_hmd(xdev);
 
 	// Remove the variable tracking.
 	u_var_remove_root(dh);
@@ -80,18 +80,18 @@ dummy_hmd_destroy(struct xrt_device *xdev)
 }
 
 static void
-dummy_hmd_update_inputs(struct xrt_device *xdev)
+spacial_linux_hmd_update_inputs(struct xrt_device *xdev)
 {
 	// Empty, you should put code to update the attached inputs fields.
 }
 
 static void
-dummy_hmd_get_tracked_pose(struct xrt_device *xdev,
+spacial_linux_hmd_get_tracked_pose(struct xrt_device *xdev,
                            enum xrt_input_name name,
                            uint64_t at_timestamp_ns,
                            struct xrt_space_relation *out_relation)
 {
-	struct dummy_hmd *dh = dummy_hmd(xdev);
+	struct spacial_linux_hmd *dh = spacial_linux_hmd(xdev);
 
 	if (name != XRT_INPUT_GENERIC_HEAD_POSE) {
 		DH_ERROR(dh, "unknown input name");
@@ -119,13 +119,60 @@ dummy_hmd_get_tracked_pose(struct xrt_device *xdev,
 	                                                               XRT_SPACE_RELATION_ORIENTATION_TRACKED_BIT);
 }
 
+float bytesToFloat(uchar b0, uchar b1, uchar b2, uchar b3)
+{
+    float output;
+
+    *((uchar*)(&output) + 3) = b0;
+    *((uchar*)(&output) + 2) = b1;
+    *((uchar*)(&output) + 1) = b2;
+    *((uchar*)(&output) + 0) = b3;
+
+    return output;
+}
+
 static void
-dummy_hmd_get_view_pose(struct xrt_device *xdev,
+spacial_linux_hmd_get_view_pose(struct xrt_device *xdev,
                         struct xrt_vec3 *eye_relation,
                         uint32_t view_index,
                         struct xrt_pose *out_pose)
 {
-	struct xrt_pose pose = {{0.0f, 0.0f, 0.0f, 1.0f}, {0.0f, 0.0f, 0.0f}};
+	int fd = open('/tmp/openxr_pos', O_RDONLY);
+	char buffer[24];
+	read(fd, buffer, sizeof(buffer));
+	close(fd);
+	uint8_t x_bytes[4];
+	uint8_t y_bytes[4];
+	uint8_t z_bytes[4];
+	uint8_t xrot_bytes[4];
+	uint8_t yrot_bytes[4];
+	uint8_t zrot_bytes[4];
+	for (int i = 0; i < 4; i++) {
+       x_bytes[i] = (uint8_t)buffer[i];
+	}for (int i = 0; i < 4; i++) {
+		y_bytes[i] = (uint8_t)buffer[i+4];
+	}for (int i = 0; i < 4; i++) {
+		z_bytes[i] = (uint8_t)buffer[i+8];
+	}for (int i = 0; i < 4; i++) {
+		xrot_bytes[i] = (uint8_t)buffer[i+12];
+	}for (int i = 0; i < 4; i++) {
+		yrot_bytes[i] = (uint8_t)buffer[i+16];
+	}for (int i = 0; i < 4; i++) {
+		zrot_bytes[i] = (uint8_t)buffer[i+20];
+	}
+	float x;
+	float y;
+	float z;
+	float xrot;
+	float yrot;
+	float zrot;
+	memcpy(&x, x_bytes, sizeof(float))
+	memcpy(&y, y_bytes, sizeof(float))
+	memcpy(&z, z_bytes, sizeof(float))
+	memcpy(&xrot, xrot_bytes, sizeof(float))
+	memcpy(&yrot, yrot_bytes, sizeof(float))
+	memcpy(&zrot, zrot_bytes, sizeof(float))
+	struct xrt_pose pose = {{x, y, z, 1.0f}, {0.0f, 0.0f, 0.0f}};
 	bool adjust = view_index == 0;
 
 	pose.position.x = eye_relation->x / 2.0f;
@@ -147,35 +194,35 @@ dummy_hmd_get_view_pose(struct xrt_device *xdev,
 }
 
 struct xrt_device *
-dummy_hmd_create(void)
+spacial_linux_hmd_create(void)
 {
 	enum u_device_alloc_flags flags =
 	    (enum u_device_alloc_flags)(U_DEVICE_ALLOC_HMD | U_DEVICE_ALLOC_TRACKING_NONE);
-	struct dummy_hmd *dh = U_DEVICE_ALLOCATE(struct dummy_hmd, flags, 1, 0);
-	dh->base.update_inputs = dummy_hmd_update_inputs;
-	dh->base.get_tracked_pose = dummy_hmd_get_tracked_pose;
-	dh->base.get_view_pose = dummy_hmd_get_view_pose;
-	dh->base.destroy = dummy_hmd_destroy;
+	struct spacial_linux_hmd *dh = U_DEVICE_ALLOCATE(struct spacial_linux_hmd, flags, 1, 0);
+	dh->base.update_inputs = spacial_linux_hmd_update_inputs;
+	dh->base.get_tracked_pose = spacial_linux_hmd_get_tracked_pose;
+	dh->base.get_view_pose = spacial_linux_hmd_get_view_pose;
+	dh->base.destroy = spacial_linux_hmd_destroy;
 	dh->base.name = XRT_DEVICE_GENERIC_HMD;
 	dh->base.device_type = XRT_DEVICE_TYPE_HMD;
 	dh->pose.orientation.w = 1.0f; // All other values set to zero.
 	dh->created_ns = os_monotonic_get_ns();
 	dh->diameter_m = 0.05;
-	dh->log_level = debug_get_log_option_dummy_log();
+	dh->log_level = debug_get_log_option_spacial_linux_log();
 
 	// Print name.
-	snprintf(dh->base.str, XRT_DEVICE_NAME_LEN, "Dummy HMD");
-	snprintf(dh->base.serial, XRT_DEVICE_NAME_LEN, "Dummy HMD");
+	snprintf(dh->base.str, XRT_DEVICE_NAME_LEN, "spacial_linux HMD");
+	snprintf(dh->base.serial, XRT_DEVICE_NAME_LEN, "spacial_linux HMD");
 
 	// Setup input.
 	dh->base.inputs[0].name = XRT_INPUT_GENERIC_HEAD_POSE;
 
 	// Setup info.
 	struct u_device_simple_info info;
-	info.display.w_pixels = 1280;
-	info.display.h_pixels = 720;
-	info.display.w_meters = 0.13f;
-	info.display.h_meters = 0.07f;
+	info.display.w_pixels = [screen_res_w];
+	info.display.h_pixels = [screen_res_h];
+	info.display.w_meters = [screen_size_w]f;
+	info.display.h_meters = [screen_size_h]f;
 	info.lens_horizontal_separation_meters = 0.13f / 2.0f;
 	info.lens_vertical_position_meters = 0.07f / 2.0f;
 	info.views[0].fov = 85.0f * (M_PI / 180.0f);
@@ -183,12 +230,12 @@ dummy_hmd_create(void)
 
 	if (!u_device_setup_split_side_by_side(&dh->base, &info)) {
 		DH_ERROR(dh, "Failed to setup basic device info");
-		dummy_hmd_destroy(&dh->base);
+		spacial_linux_hmd_destroy(&dh->base);
 		return NULL;
 	}
 
 	// Setup variable tracker.
-	u_var_add_root(dh, "Dummy HMD", true);
+	u_var_add_root(dh, "Spacial Linux HMD", true);
 	u_var_add_pose(dh, &dh->pose, "pose");
 	u_var_add_vec3_f32(dh, &dh->center, "center");
 	u_var_add_f32(dh, &dh->diameter_m, "diameter_m");

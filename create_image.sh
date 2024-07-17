@@ -14,7 +14,7 @@ if [[ -n $iso ]] ; then
 else
     echo -en "Select Ubuntu version (arrow keys): :\e[7m\e[5m";
     echo -n "24.04"
-    versions=("24.04  " "23.04  " "22.04.4" "21.04  " "20.04.6" "19.04  " "18.04  " "17.04  " "16.04.7" "14.04.6")
+    versions=("24.04  " "23.04  " "22.04.4" "21.04  " "20.04.6" "19.04  " "18.04.6" "17.04  " "16.04.7" "14.04.6")
     version=0
     while :;do
         read -rsn1 mode # get 1 character
